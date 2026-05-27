@@ -17,7 +17,7 @@ const TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 
 app.use(cors());
 app.use(express.json({ limit: "16kb" }));
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, "public")));
 
 function sanitizeUsername(input) {
   return String(input || "")
@@ -250,7 +250,7 @@ app.delete("/api/messages/:id", async (req, res) => {
 });
 
 app.use((_req, res) => {
-  res.sendFile(path.join(__dirname, "Whisp.html"));
+  res.sendFile(path.join(__dirname, "public", "Whisp.html"));
 });
 
 ensureDataFiles()
