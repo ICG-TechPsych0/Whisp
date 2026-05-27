@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whisp — What are people really thinking?</title>
+  <meta name="description" content="Get anonymous thoughts from your friends. 100% anonymous.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👻</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #111015;
+      --bg2:        #191721;
+      --surface:    rgba(255,255,255,0.04);
+      --surface2:   rgba(255,255,255,0.08);
+      --border:     rgba(255,255,255,0.12);
+      --border2:    rgba(168,157,200,0.45);
+      --purple:     #b8a7f1;
+      --purple2:    #9c8fd8;
+      --purple-dim: rgba(184,167,241,0.14);
+      --purple-glow:rgba(184,167,241,0.08);
+      --text:       #f0edf8;
+      --text2:      #bcb5d1;
+      --text3:      #7f7897;
+      --success:    #8ee2ac;
+      --danger:     #f2a8a8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Background canvas ── */
+    #bg-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    }
+
+    /* ── App shell ── */
+    .app {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 2.5rem 1.25rem 5rem;
+    }
+
+    /* ── Pages ── */
+    .page { display: none; width: 100%; max-width: 440px; flex-direction: column; align-items: center; }
+    .page.active { display: flex; animation: pageIn 0.45s cubic-bezier(.22,.61,.36,1) both; }
+    @keyframes pageIn {
+      from { opacity: 0; transform: translateY(18px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+
+    /* ── Ghost ── */
+    .ghost {
+      font-size: 88px; line-height: 1;
+      user-select: none; cursor: default;
+      filter: drop-shadow(0 0 40px rgba(196,181,247,0.45));
+      animation: float 3.8s ease-in-out infinite;
+    }
+    .ghost.sm { font-size: 64px; }
+    @keyframes float {
+      0%,100% { transform: translateY(0px) rotate(-4deg); }
+      50%      { transform: translateY(-16px) rotate(4deg); }
+    }
+
+    /* ── Logo ── */
+    .logo {
+      font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 54px; font-weight: 800;
+      letter-spacing: -2px; margin: .5rem 0 .2rem;
+      background: linear-gradient(145deg, #f5f0ff 20%, #c4b5f7 60%, #9d8fe8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      font-size: 14.5px; color: var(--text2); font-weight: 300;
+      letter-spacing: .2px; margin-bottom: 2.5rem; text-align: center;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 1.75rem;
+      width: 100%;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    .card-label {
+      font-size: 12px; font-weight: 600; letter-spacing: .8px;
+      color: var(--text3); text-transform: uppercase; margin-bottom: 10px;
+    }
+
+    /* ── Inputs ── */
+    .input-wrap { position: relative; width: 100%; }
+    .input-pre {
+      position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
+      color: var(--text3); font-size: 14px; pointer-events: none; font-family: Inter, "Segoe UI", Roboto, sans-serif;
+      white-space: nowrap;
+    }
+
+    input[type="text"], textarea {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      color: var(--text);
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s, background .2s;
+      caret-color: var(--purple);
+    }
+    input[type="text"] { height: 52px; padding: 0 16px; }
+    input[type="text"].prefixed { padding-left: 85px; }
+    textarea {
+      padding: 15px 16px; resize: none;
+      min-height: 145px; line-height: 1.65;
+    }
+    input::placeholder, textarea::placeholder { color: var(--text3); }
+    input[type="text"]:focus, textarea:focus {
+      border-color: rgba(196,181,247,.45);
+      background: rgba(255,255,255,0.06);
+      box-shadow: 0 0 0 3px rgba(196,181,247,.09);
+    }
+    input.error { border-color: rgba(252,165,165,.45) !important; box-shadow: 0 0 0 3px rgba(252,165,165,.09) !important; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; height: 52px;
+      border: none; border-radius: 13px;
+      font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 15px; font-weight: 700;
+      cursor: pointer;
+      transition: transform .15s, opacity .15s, box-shadow .2s;
+      margin-top: 12px;
+    }
+    .btn:hover { transform: translateY(-1px); opacity: .92; }
+    .btn:active { transform: scale(.98); }
+
+    .btn-primary {
+      background: var(--purple);
+      color: #1a1228;
+      box-shadow: 0 4px 20px rgba(196,181,247,.22);
+    }
+    .btn-primary:hover { box-shadow: 0 8px 30px rgba(196,181,247,.38); }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text2);
+      font-size: 14px; font-weight: 500;
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+    }
+    .btn-ghost:hover { border-color: var(--border2); color: var(--text); box-shadow: none; }
+
+    /* ── Link box ── */
+    .link-box {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--purple-dim);
+      border: 1px solid rgba(196,181,247,.2);
+      border-radius: 13px;
+      padding: 13px 15px;
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+      margin: 14px 0 4px;
+    }
+    .link-box:hover { background: rgba(196,181,247,.18); border-color: rgba(196,181,247,.35); }
+    .link-url { flex: 1; font-size: 13px; color: var(--purple); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .link-copy { font-size: 17px; flex-shrink: 0; }
+
+    /* ── Stats strip ── */
+    .stats {
+      display: flex; align-items: center; gap: 0;
+      margin-top: 2.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .stat {
+      flex: 1; padding: 1rem .5rem; text-align: center;
+      position: relative;
+    }
+    .stat + .stat::before {
+      content: ''; position: absolute; left: 0; top: 20%; height: 60%;
+      width: 1px; background: var(--border);
+    }
+    .stat-val { font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 20px; font-weight: 700; color: var(--purple); }
+    .stat-lbl { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+    /* ── Send page ── */
+    .send-from {
+      font-size: 13px; color: var(--text2); text-align: center;
+      margin-top: .75rem;
+    }
+    .send-name {
+      font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 30px; font-weight: 800;
+      text-align: center; margin: .3rem 0 2rem;
+      background: linear-gradient(135deg, #f5f0ff, #c4b5f7);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .char-bar-wrap { width: 100%; height: 2px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+    .char-bar { height: 100%; background: var(--purple); border-radius: 2px; transition: width .1s; width: 0%; }
+
+    .anon-note {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 12px; color: var(--text3); margin-top: 14px;
+    }
+    .anon-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+
+    /* ── Success page ── */
+    .success-emoji {
+      font-size: 72px;
+      animation: pop .55s cubic-bezier(.175,.885,.32,1.275) both;
+    }
+    @keyframes pop {
+      from { transform: scale(.4) rotate(-10deg); opacity: 0; }
+      to   { transform: scale(1) rotate(0deg);   opacity: 1; }
+    }
+    .success-title {
+      font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 26px; font-weight: 800;
+      margin: .75rem 0 .3rem; text-align: center;
+    }
+    .success-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 2rem; }
+
+    /* ── Inbox ── */
+    .inbox-top {
+      display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 1.5rem;
+    }
+    .back-btn {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--text2); font-size: 16px;
+      transition: color .2s, border-color .2s; flex-shrink: 0;
+    }
+    .back-btn:hover { color: var(--text); border-color: var(--border2); }
+
+    .inbox-heading { font-family: Inter, "Segoe UI", Roboto, sans-serif; font-size: 22px; font-weight: 700; }
+    .inbox-count { margin-left: auto; font-size: 12px; color: var(--text3); white-space: nowrap; }
+
+    .msg-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.2rem 1.4rem 1rem;
+      width: 100%; margin-bottom: 10px;
+      position: relative;
+      transition: border-color .2s, background .2s;
+    }
+    .msg-card:hover { border-color: rgba(196,181,247,.2); background: var(--surface2); }
+    .msg-ghost { position: absolute; top: 14px; right: 16px; font-size: 16px; opacity: .35; }
+    .msg-text { font-size: 15px; line-height: 1.65; color: var(--text); padding-right: 24px; }
+    .msg-time { font-size: 11.5px; color: var(--text3); margin-top: 10px; }
+    .msg-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+    .msg-del {
+      background: transparent;
+      border: 1px solid rgba(242,168,168,0.35);
+      color: rgba(242,168,168,0.9);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s, border-color .15s, opacity .15s;
+    }
+    .msg-del:hover { background: rgba(242,168,168,0.08); border-color: rgba(242,168,168,0.55); }
+    .msg-del:active { opacity: .85; }
+
+    .empty {
+      text-align: center; padding: 3.5rem 0; color: var(--text3);
+    }
+    .empty-ghost { font-size: 52px; display: block; margin-bottom: 14px; opacity: .35; }
+
+    .share-row {
+      width: 100%; margin-top: 1rem;
+      background: var(--purple-dim);
+      border: 1px solid rgba(196,181,247,.15);
+      border-radius: 14px; padding: 1rem 1.25rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .share-row p { font-size: 13px; color: var(--text2); }
+    .share-row button {
+      background: var(--purple); color: #1a1228;
+      border: none; border-radius: 9px; padding: 8px 16px;
+      font-family: Inter, "Segoe UI", Roboto, sans-serif; font-weight: 700; font-size: 13px;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+      transition: opacity .15s;
+    }
+    .share-row button:hover { opacity: .85; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 2rem; left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: #1e1a33; border: 1px solid rgba(196,181,247,.3);
+      color: var(--text); padding: 11px 22px;
+      border-radius: 100px; font-size: 14px; z-index: 999;
+      white-space: nowrap; pointer-events: none;
+      transition: transform .35s cubic-bezier(.175,.885,.32,1.275), opacity .35s;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* ── Footer ── */
+    footer {
+      position: fixed; bottom: 1rem; left: 0; right: 0;
+      text-align: center; font-size: 12px; color: var(--text3);
+      z-index: 1; pointer-events: none;
+    }
+    footer span { color: var(--purple); font-weight: 600; }
+
+    /* ── Back link ── */
+    .back-link {
+      background: none; border: none; color: var(--text3);
+      font-size: 13px; cursor: pointer; margin-top: 1.5rem;
+      font-family: Inter, "Segoe UI", Roboto, sans-serif;
+      transition: color .2s;
+    }
+    .back-link:hover { color: var(--text2); }
+
+    @media (max-width: 500px) {
+      .logo { font-size: 42px; }
+      .ghost { font-size: 72px; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="app">
+
+  <!-- ─── HOME ─── -->
+  <section class="page active" id="page-home" role="main">
+    <div class="ghost" role="img" aria-label="Ghost emoji">👻</div>
+    <h1 class="logo">Whisp</h1>
+    <p class="tagline">hear what people really think about you</p>
+
+    <div class="card">
+      <p class="card-label">Your username</p>
+      <div class="input-wrap">
+        <span class="input-pre">whisp.app/</span>
+        <input type="text" id="username-input" class="prefixed" placeholder="yourname"
+          maxlength="28" autocomplete="off" autocapitalize="off" spellcheck="false"
+          aria-label="Username">
+      </div>
+      <button class="btn btn-primary" id="get-link-btn" aria-label="Get my Whisp link">
+        Get my link ✦
+      </button>
+      <button class="btn btn-ghost" id="inbox-btn" aria-label="Check my inbox">
+        Check my inbox
+      </button>
+    </div>
+
+    <div class="stats" aria-label="App features">
+      <div class="stat">
+        <div class="stat-val">👻</div>
+        <div class="stat-lbl">Ghost mode</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">100%</div>
+        <div class="stat-lbl">Anonymous</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">∞</div>
+        <div class="stat-lbl">Free forever</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── LINK READY ─── -->
+  <section class="page" id="page-link">
+    <div class="ghost" role="img" aria-label="Ghost">👻</div>
+    <h1 class="logo">You're live!</h1>
+    <p class="tagline">share your link and let the whisps in</p>
+
+    <div class="card">
+      <p class="card-label">Your personal Whisp link</p>
+      <div class="link-box" id="link-box" role="button" tabindex="0" aria-label="Copy link" onclick="copyLink()" onkeydown="if(event.key==='Enter')copyLink()">
+        <span class="link-url" id="link-display"></span>
+        <span class="link-copy" aria-hidden="true">📋</span>
+      </div>
+      <button class="btn btn-primary" id="share-btn">Share my Whisp ↗</button>
+      <button class="btn btn-ghost" onclick="goToInbox()">See my inbox</button>
+    </div>
+
+    <button class="back-link" onclick="showPage('home')">← start over</button>
+  </section>
+
+  <!-- ─── SEND ─── -->
+  <section class="page" id="page-send">
+    <div class="inbox-top" style="margin-bottom: 1.25rem;">
+      <div class="back-btn" role="button" tabindex="0" aria-label="Go back" onclick="sendBack()" onkeydown="if(event.key==='Enter')sendBack()">←</div>
+      <div style="flex:1"></div>
+    </div>
+    <div class="ghost sm" role="img" aria-label="Ghost">👻</div>
+    <p class="send-from">send an anonymous whisp to</p>
+    <h2 class="send-name" id="send-to-label"></h2>
+
+    <div class="card">
+      <textarea id="msg-input" placeholder="type something honest... they'll never know it was you 👀"
+        maxlength="300" aria-label="Anonymous message"></textarea>
+      <div class="char-bar-wrap"><div class="char-bar" id="char-bar"></div></div>
+
+      <button class="btn btn-primary" id="send-btn">Send Whisp 👻</button>
+
+      <div class="anon-note" aria-live="polite">
+        <span class="anon-dot"></span>
+        100% anonymous · your identity is never revealed
+      </div>
+    </div>
+
+    <div style="margin-top:2rem; text-align:center;">
+      <p style="font-size:13px; color:var(--text3);">Want your own Whisp link?</p>
+      <button onclick="showPage('home')" style="background:none;border:none;color:var(--purple);font-size:14px;font-weight:600;cursor:pointer;font-family:Inter,'Segoe UI',Roboto,sans-serif;margin-top:4px;">Get mine →</button>
+    </div>
+  </section>
+
+  <!-- ─── SENT ─── -->
+  <section class="page" id="page-sent">
+    <div class="success-emoji" role="img" aria-label="Sparkles">✨</div>
+    <h2 class="success-title">Whisp sent!</h2>
+    <p class="success-sub">Your secret is safe 👻</p>
+
+    <div class="card" style="text-align:center;">
+      <p style="font-size:14px; color:var(--text2); margin-bottom:4px;">Want your own anonymous inbox?</p>
+      <p style="font-size:12px; color:var(--text3); margin-bottom:1rem;">Find out what people really think about you</p>
+      <button class="btn btn-primary" onclick="showPage('home')">Get my Whisp link ✦</button>
+      <button class="btn btn-ghost" id="send-another-btn">Send another Whisp</button>
+    </div>
+  </section>
+
+  <!-- ─── INBOX ─── -->
+  <section class="page" id="page-inbox">
+    <div class="inbox-top">
+      <div class="back-btn" role="button" tabindex="0" aria-label="Go back" onclick="showPage('home')" onkeydown="if(event.key==='Enter')showPage('home')">←</div>
+      <h2 class="inbox-heading" id="inbox-heading"></h2>
+      <span class="inbox-count" id="inbox-count" aria-live="polite"></span>
+    </div>
+    <div id="messages-list" style="width:100%;" aria-live="polite"></div>
+    <div class="share-row" id="share-row" style="display:none;">
+      <p>Get more whisps by sharing your link</p>
+      <button onclick="shareFromInbox()">Share link</button>
+    </div>
+  </section>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" role="alert" aria-live="assertive"></div>
+
+<footer>
+  👻 <span>whisp</span> · anonymous messages from friends
+</footer>
+
+<script>
+(function() {
+
+  // ── Canvas background ──
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, orbs = [];
+
+  function initCanvas() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    orbs = Array.from({ length: 6 }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: 180 + Math.random() * 200,
+      dx: (Math.random() - .5) * .3, dy: (Math.random() - .5) * .3,
+      hue: 250 + Math.random() * 40,
+      a: .04 + Math.random() * .05
+    }));
+  }
+
+  function drawCanvas() {
+    ctx.clearRect(0, 0, W, H);
+    orbs.forEach(o => {
+      const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+      g.addColorStop(0, `hsla(${o.hue},70%,70%,${o.a})`);
+      g.addColorStop(1, `hsla(${o.hue},70%,70%,0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      o.x += o.dx; o.y += o.dy;
+      if (o.x < -o.r || o.x > W + o.r) o.dx *= -1;
+      if (o.y < -o.r || o.y > H + o.r) o.dy *= -1;
+    });
+    requestAnimationFrame(drawCanvas);
+  }
+
+  window.addEventListener('resize', initCanvas);
+  initCanvas();
+  drawCanvas();
+
+  // ── State ──
+  let activeUser = null;
+  let sendTarget = null;
+  const API = '/api';
+  let inboxPoll = null;
+
+  // ── Router ──
+  async function init() {
+    const p = new URLSearchParams(location.search);
+    const to = p.get('to');
+    const inbox = p.get('inbox');
+    if (to) {
+      sendTarget = sanitize(to);
+      if (!sendTarget) return showPage('home');
+      renderSendPage(sendTarget);
+    } else if (inbox) {
+      activeUser = sanitize(inbox);
+      if (!activeUser) return showPage('home');
+      await renderInbox(activeUser);
+    }
+    else showPage('home');
+  }
+
+  function showPage(name) {
+    document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+    const pg = document.getElementById('page-' + name);
+    if (pg) pg.classList.add('active');
+  }
+
+  // ── Utilities ──
+  function sanitize(s) {
+    return String(s).trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '').slice(0, 28);
+  }
+
+  function myOrigin() {
+    return location.origin + location.pathname;
+  }
+
+  function myLink(user) {
+    return myOrigin() + '?to=' + encodeURIComponent(user);
+  }
+
+  function escHTML(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function timeAgo(ts) {
+    const d = Date.now() - ts;
+    const m = Math.floor(d / 6e4);
+    if (m < 1)  return 'just now';
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    const days = Math.floor(h / 24);
+    return days === 1 ? 'yesterday' : days + 'd ago';
+  }
+
+  function toast(msg, duration = 2600) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+  function pushURL(qs) { history.pushState(null, '', qs); }
+
+  async function api(path, options = {}) {
+    const res = await fetch(API + path, {
+      method: options.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    let data = null;
+    try { data = await res.json(); } catch {}
+    if (!res.ok) {
+      const err = new Error((data && data.error) ? data.error : 'Request failed');
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+
+  function ownerKeyFor(username) {
+    const u = sanitize(username);
+    return localStorage.getItem('whisp_owner_' + u) || '';
+  }
+
+  function ensureOwnerKey(username) {
+    const u = sanitize(username);
+    const keyName = 'whisp_owner_' + u;
+    let k = localStorage.getItem(keyName);
+    if (!k) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      k = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(keyName, k);
+    }
+    return k;
+  }
+
+  function clearInboxPoll() {
+    if (inboxPoll) clearInterval(inboxPoll);
+    inboxPoll = null;
+  }
+
+  // ── Validation ──
+  function getAndValidateUsername() {
+    const raw = document.getElementById('username-input').value;
+    const clean = sanitize(raw);
+    const inp = document.getElementById('username-input');
+    if (!clean) {
+      inp.classList.add('error');
+      inp.placeholder = 'enter a username first!';
+      setTimeout(() => { inp.classList.remove('error'); inp.placeholder = 'yourname'; }, 2200);
+      return null;
+    }
+    return clean;
+  }
+
+  // ── Home ──
+  document.getElementById('get-link-btn').addEventListener('click', async () => {
+    const u = getAndValidateUsername(); if (!u) return;
+    try {
+      const ownerKey = ensureOwnerKey(u);
+      await api('/users', { method: 'POST', body: { username: u, ownerKey } });
+      activeUser = u;
+      document.getElementById('link-display').textContent = myLink(u);
+      document.getElementById('share-btn').onclick = shareLink;
+      showPage('link');
+      pushURL('?user=' + encodeURIComponent(u));
+    } catch (_err) {
+      toast(_err && _err.status === 409 ? 'That username is taken — pick another' : 'Could not create profile right now');
+    }
+  });
+
+  document.getElementById('inbox-btn').addEventListener('click', async () => {
+    const u = getAndValidateUsername(); if (!u) return;
+    activeUser = u;
+    try {
+      const ownerKey = ensureOwnerKey(u);
+      await api('/users', { method: 'POST', body: { username: u, ownerKey } });
+    } catch (_err) {
+      // Inbox can still load even if profile isn't claimed here
+    }
+    await renderInbox(u);
+    pushURL('?inbox=' + encodeURIComponent(u));
+  });
+
+  document.getElementById('username-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('get-link-btn').click();
+  });
+
+  // ── Link page ──
+  function copyLink() {
+    const url = myLink(activeUser);
+    navigator.clipboard.writeText(url)
+      .then(() => toast('Link copied! 📋'))
+      .catch(() => toast('Copy failed — try manually'));
+  }
+  window.copyLink = copyLink;
+
+  function shareLink() {
+    const url = myLink(activeUser);
+    if (navigator.share) {
+      navigator.share({ title: 'Send me an anonymous Whisp!', text: 'Tell me what you really think 👻', url });
+    } else { copyLink(); }
+  }
+
+  async function goToInbox() {
+    await renderInbox(activeUser);
+    pushURL('?inbox=' + encodeURIComponent(activeUser));
+  }
+  window.goToInbox = goToInbox;
+
+  // ── Send page ──
+  function renderSendPage(username) {
+    document.getElementById('send-to-label').textContent = '@' + username;
+    showPage('send');
+  }
+
+  function sendBack() {
+    if (history.length > 1) history.back();
+    else { showPage('home'); pushURL(''); }
+  }
+  window.sendBack = sendBack;
+
+  const msgInput   = document.getElementById('msg-input');
+  const charBar    = document.getElementById('char-bar');
+  const MAX_CHARS  = 300;
+
+  msgInput.addEventListener('input', () => {
+    const len = msgInput.value.length;
+    charBar.style.width = (len / MAX_CHARS * 100) + '%';
+    charBar.style.background = len > MAX_CHARS * .85 ? '#f87171' : 'var(--purple)';
+  });
+
+  document.getElementById('send-btn').addEventListener('click', async () => {
+    const text = msgInput.value.trim();
+    if (!text) {
+      msgInput.style.borderColor = 'rgba(252,165,165,.45)';
+      setTimeout(() => msgInput.style.borderColor = '', 1800);
+      return;
+    }
+
+    try {
+      await api('/messages', {
+        method: 'POST',
+        body: { to: sendTarget, text }
+      });
+    } catch (_err) {
+      toast('Could not send message. Try again.');
+      return;
+    }
+
+    // Setup "send another"
+    document.getElementById('send-another-btn').onclick = () => {
+      msgInput.value = '';
+      charBar.style.width = '0%';
+      showPage('send');
+    };
+
+    showPage('sent');
+  });
+
+  // ── Inbox ──
+  async function renderInbox(username) {
+    document.getElementById('inbox-heading').textContent = '@' + username;
+    let msgs = [];
+    try {
+      const data = await api('/messages/' + encodeURIComponent(username));
+      msgs = Array.isArray(data.messages) ? data.messages : [];
+    } catch (_err) {
+      toast('Could not load inbox');
+      msgs = [];
+    }
+
+    document.getElementById('inbox-count').textContent =
+      msgs.length ? msgs.length + (msgs.length === 1 ? ' whisp' : ' whisps') : '';
+
+    const list = document.getElementById('messages-list');
+
+    if (msgs.length === 0) {
+      list.innerHTML =
+        '<div class="empty">' +
+        '<span class="empty-ghost" aria-hidden="true">👻</span>' +
+        'No whisps yet<br>' +
+        '<span style="font-size:13px;">Share your link to start getting anonymous messages</span>' +
+        '</div>';
+    } else {
+      const canDelete = (sanitize(activeUser) === sanitize(username)) && !!ownerKeyFor(username);
+      list.innerHTML = msgs.map(m =>
+        '<div class="msg-card">' +
+        '<span class="msg-ghost" aria-hidden="true">👻</span>' +
+        '<p class="msg-text">' + escHTML(m.text) + '</p>' +
+        '<p class="msg-time">' + timeAgo(m.ts) + '</p>' +
+        (canDelete ? ('<div class="msg-actions"><button class="msg-del" data-del="' + escHTML(String(m.id)) + '">Delete</button></div>') : '') +
+        '</div>'
+      ).join('');
+
+      if (canDelete) {
+        list.querySelectorAll('[data-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-del');
+            try {
+              await api('/messages/' + encodeURIComponent(id), {
+                method: 'DELETE',
+                body: { to: username, ownerKey: ownerKeyFor(username) }
+              });
+              toast('Deleted');
+              await renderInbox(username);
+            } catch (_err) {
+              toast('Could not delete');
+            }
+          });
+        });
+      }
+    }
+
+    const shareRow = document.getElementById('share-row');
+    shareRow.style.display = 'flex';
+
+    showPage('inbox');
+
+    clearInboxPoll();
+    inboxPoll = setInterval(() => {
+      const active = document.getElementById('page-inbox').classList.contains('active');
+      if (active) renderInbox(username);
+    }, 5000);
+  }
+
+  function shareFromInbox() {
+    const url = myLink(activeUser || (new URLSearchParams(location.search).get('inbox')));
+    if (navigator.share) {
+      navigator.share({ title: 'Send me an anonymous Whisp!', url });
+    } else {
+      navigator.clipboard.writeText(url).then(() => toast('Link copied! 📋'));
+    }
+  }
+  window.shareFromInbox = shareFromInbox;
+
+  // ── Browser back ──
+  window.addEventListener('popstate', init);
+
+  // ── Boot ──
+  init();
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+[
+  {
+    "username": "yeet",
+    "createdAt": 1779907095404,
+    "ownerKey": "7891e6b7b4fa3934898854f566ff42dd",
+    "expiresAt": 1780169013871
+  },
+  {
+    "username": "gasper",
+    "createdAt": 1779907869862
+  },
+  {
+    "username": "owner1",
+    "createdAt": 1779908460790
+  },
+  {
+    "username": "owner2",
+    "ownerKey": "key2",
+    "createdAt": 1779908523775,
+    "expiresAt": 1780167723775
+  },
+  {
+    "username": "etet",
+    "ownerKey": "5aa306293aa73154ef20b1abbf842bc1",
+    "createdAt": 1779909799913,
+    "expiresAt": 1780168999913
+  }
+]
